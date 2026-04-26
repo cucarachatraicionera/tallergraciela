@@ -889,3 +889,138 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+/* ===================================================
+   CHAT WIDGET
+   =================================================== */
+
+const CHAT_WEBHOOK_URL = 'https://onyapitesting.app.n8n.cloud/webhook/chat-agent';
+
+// Generate unique session ID for this browser tab
+const CHAT_SESSION_ID = 'session_' + Math.random().toString(36).slice(2, 11) + '_' + Date.now();
+
+let chatOpen = false;
+let chatIsTyping = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const win = document.getElementById('chatWindow');
+  const icon = document.getElementById('chatBtnIcon');
+
+  if (chatOpen) {
+    win.classList.remove('chat-window-hidden');
+    icon.textContent = '✕';
+    // Focus input
+    setTimeout(() => document.getElementById('chatInput')?.focus(), 350);
+    // Hide notification dot
+    document.getElementById('chatDot').classList.add('hidden');
+  } else {
+    win.classList.add('chat-window-hidden');
+    icon.textContent = '💬';
+  }
+}
+
+function appendMessage(role, text) {
+  const container = document.getElementById('chatMessages');
+  const isBot = role === 'bot';
+
+  const now = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+  const div = document.createElement('div');
+  div.className = `chat-msg ${isBot ? 'chat-msg-bot' : 'chat-msg-user'}`;
+
+  if (isBot) {
+    div.innerHTML = `
+      <div class="chat-msg-avatar">⚡</div>
+      <div>
+        <div class="chat-msg-bubble">${formatChatText(text)}</div>
+        <div class="chat-msg-time">${now}</div>
+      </div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div>
+        <div class="chat-msg-bubble">${escHtml(text)}</div>
+        <div class="chat-msg-time" style="text-align:right">${now}</div>
+      </div>
+    `;
+  }
+
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function formatChatText(text) {
+  // Convert markdown-like formatting to HTML
+  return escHtml(text)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+function showTyping(show) {
+  const el = document.getElementById('chatTyping');
+  const container = document.getElementById('chatMessages');
+  if (show) {
+    el.classList.remove('hidden');
+    container.scrollTop = container.scrollHeight;
+  } else {
+    el.classList.add('hidden');
+  }
+  chatIsTyping = show;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const message = input.value.trim();
+
+  if (!message || chatIsTyping) return;
+
+  // Clear input
+  input.value = '';
+  sendBtn.disabled = true;
+
+  // Show user message
+  appendMessage('user', message);
+
+  // Show typing indicator
+  showTyping(true);
+
+  try {
+    const res = await fetch(CHAT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message,
+        session_id: CHAT_SESSION_ID
+      })
+    });
+
+    showTyping(false);
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    // Try different response field names
+    const reply = data.response || data.output || data.text || data.answer || data.message
+      || (Array.isArray(data) && data[0]?.response)
+      || 'Lo siento, no pude procesar tu mensaje en este momento.';
+
+    appendMessage('bot', reply);
+
+  } catch (err) {
+    showTyping(false);
+    console.error('Chat error:', err);
+    appendMessage('bot', '⚠️ Hubo un problema al conectar con el asistente. Por favor intenta de nuevo en un momento.');
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+
+    // Show notification dot if chat is closed
+    if (!chatOpen) {
+      document.getElementById('chatDot').classList.remove('hidden');
+    }
+  }
+}
