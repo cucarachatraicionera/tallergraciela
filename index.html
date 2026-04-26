@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TallerPro — Gestión de Trabajos</title>
+  <meta name="description" content="Panel de gestión de trabajos para técnicos del taller. Asigna trabajos y revisa el desempeño de tu equipo." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Animated Background -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🔧</div>
+      <div class="logo-text">
+        <span class="logo-name">TallerPro</span>
+        <span class="logo-sub">Panel de Control</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" id="nav-asignar" onclick="showSection('asignar')">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Asignar Trabajo</span>
+        <span class="nav-indicator"></span>
+      </button>
+      <button class="nav-item" id="nav-dashboard" onclick="showSection('dashboard')">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Dashboard</span>
+        <span class="nav-indicator"></span>
+      </button>
+      <button class="nav-item" id="nav-trabajos" onclick="showSection('trabajos')">
+        <span class="nav-icon">🗂️</span>
+        <span class="nav-label">Todos los Trabajos</span>
+        <span class="nav-indicator"></span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="online-indicator">
+        <span class="dot"></span>
+        <span>Sistema activo</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile header -->
+  <header class="mobile-header">
+    <button class="menu-toggle" id="menuToggle" onclick="toggleMobileSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <span class="mobile-logo">🔧 TallerPro</span>
+    <div class="mobile-status">
+      <span class="dot"></span>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ==================== SECTION: ASIGNAR TRABAJO ==================== -->
+    <section class="section active" id="section-asignar">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Asignar Trabajo</h1>
+          <p class="section-subtitle">Crea y envía un nuevo trabajo a un técnico vía Telegram</p>
+        </div>
+        <div class="header-badge">
+          <span class="badge-dot"></span>
+          Webhook activo
+        </div>
+      </div>
+
+      <div class="form-wrapper">
+        <div class="form-card glass-card">
+          <div class="form-card-header">
+            <div class="form-icon-wrap">
+              <span class="form-icon">📱</span>
+            </div>
+            <div>
+              <h2 class="form-card-title">Nuevo Trabajo</h2>
+              <p class="form-card-desc">El técnico recibirá una notificación en Telegram al instante</p>
+            </div>
+          </div>
+
+          <form id="formAsignar" onsubmit="enviarTrabajo(event)">
+            <div class="form-grid">
+
+              <div class="form-group full-width">
+                <label class="form-label" for="tecnico_id">
+                  <span class="label-icon">👨‍🔧</span>
+                  Técnico Asignado
+                </label>
+                <div class="select-wrapper">
+                  <select id="tecnico_id" name="tecnico_id" class="form-select" required>
+                    <option value="">Cargando técnicos...</option>
+                  </select>
+                  <span class="select-arrow">▼</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="cliente">
+                  <span class="label-icon">👤</span>
+                  Cliente
+                </label>
+                <input
+                  type="text"
+                  id="cliente"
+                  name="cliente"
+                  class="form-input"
+                  placeholder="Nombre del cliente"
+                  required
+                  autocomplete="off"
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="equipo">
+                  <span class="label-icon">📱</span>
+                  Equipo
+                </label>
+                <input
+                  type="text"
+                  id="equipo"
+                  name="equipo"
+                  class="form-input"
+                  placeholder="Ej: iPhone 12, Samsung S21..."
+                  required
+                  autocomplete="off"
+                />
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label" for="descripcion">
+                  <span class="label-icon">📝</span>
+                  Descripción del Problema
+                </label>
+                <textarea
+                  id="descripcion"
+                  name="descripcion"
+                  class="form-textarea"
+                  placeholder="Describe detalladamente el problema del equipo..."
+                  rows="4"
+                  required
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" onclick="limpiarFormulario()">
+                🗑️ Limpiar
+              </button>
+              <button type="submit" class="btn btn-primary" id="btnEnviar">
+                <span class="btn-text">🚀 Enviar Trabajo</span>
+                <div class="btn-loader hidden" id="btnLoader">
+                  <div class="spinner"></div>
+                </div>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+          <div class="stat-mini glass-card">
+            <div class="stat-mini-icon">🔧</div>
+            <div class="stat-mini-content">
+              <span class="stat-mini-val" id="stat-total">—</span>
+              <span class="stat-mini-label">Total Trabajos</span>
+            </div>
+          </div>
+          <div class="stat-mini glass-card">
+            <div class="stat-mini-icon">⏳</div>
+            <div class="stat-mini-content">
+              <span class="stat-mini-val" id="stat-pendiente">—</span>
+              <span class="stat-mini-label">Pendientes</span>
+            </div>
+          </div>
+          <div class="stat-mini glass-card">
+            <div class="stat-mini-icon">⚡</div>
+            <div class="stat-mini-content">
+              <span class="stat-mini-val" id="stat-progreso">—</span>
+              <span class="stat-mini-label">En Progreso</span>
+            </div>
+          </div>
+          <div class="stat-mini glass-card">
+            <div class="stat-mini-icon">✅</div>
+            <div class="stat-mini-content">
+              <span class="stat-mini-val" id="stat-completado">—</span>
+              <span class="stat-mini-label">Completados</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Assignments -->
+        <div class="recent-card glass-card">
+          <div class="recent-header">
+            <h3 class="recent-title">📌 Recientes</h3>
+            <button class="refresh-btn" onclick="cargarDatos()" title="Actualizar">↻</button>
+          </div>
+          <div class="recent-list" id="recentList">
+            <div class="loading-skeleton">
+              <div class="skel-row"></div>
+              <div class="skel-row"></div>
+              <div class="skel-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SECTION: DASHBOARD ==================== -->
+    <section class="section" id="section-dashboard">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Dashboard de Desempeño</h1>
+          <p class="section-subtitle">Análisis en tiempo real del rendimiento de tu equipo</p>
+        </div>
+        <button class="refresh-btn-lg" onclick="cargarDatos()">↻ Actualizar</button>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card glass-card kpi-blue">
+          <div class="kpi-icon">🔨</div>
+          <div class="kpi-content">
+            <div class="kpi-val" id="kpi-total">0</div>
+            <div class="kpi-label">Total de Trabajos</div>
+          </div>
+          <div class="kpi-trend" id="kpi-total-trend"></div>
+        </div>
+        <div class="kpi-card glass-card kpi-yellow">
+          <div class="kpi-icon">⏳</div>
+          <div class="kpi-content">
+            <div class="kpi-val" id="kpi-pendientes">0</div>
+            <div class="kpi-label">Pendientes</div>
+          </div>
+        </div>
+        <div class="kpi-card glass-card kpi-purple">
+          <div class="kpi-icon">⚡</div>
+          <div class="kpi-content">
+            <div class="kpi-val" id="kpi-progreso">0</div>
+            <div class="kpi-label">En Progreso</div>
+          </div>
+        </div>
+        <div class="kpi-card glass-card kpi-green">
+          <div class="kpi-icon">✅</div>
+          <div class="kpi-content">
+            <div class="kpi-val" id="kpi-completados">0</div>
+            <div class="kpi-label">Completados</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Technician Performance -->
+      <div class="dash-grid">
+        <div class="glass-card dash-card">
+          <h3 class="dash-card-title">👨‍🔧 Desempeño por Técnico</h3>
+          <div id="tecnicoPerformance" class="perf-list">
+            <div class="loading-pulse">Cargando datos...</div>
+          </div>
+        </div>
+
+        <div class="glass-card dash-card">
+          <h3 class="dash-card-title">📈 Distribución de Trabajos</h3>
+          <div class="chart-container">
+            <canvas id="donutChart" width="220" height="220"></canvas>
+            <div class="chart-legend" id="chartLegend"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Analysis -->
+      <div class="glass-card time-analysis">
+        <h3 class="dash-card-title">⏱️ Análisis de Tiempos</h3>
+        <div class="time-grid" id="timeGrid">
+          <div class="loading-pulse">Calculando tiempos...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SECTION: TODOS LOS TRABAJOS ==================== -->
+    <section class="section" id="section-trabajos">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Todos los Trabajos</h1>
+          <p class="section-subtitle">Historial completo con filtros</p>
+        </div>
+        <button class="refresh-btn-lg" onclick="cargarDatos()">↻ Actualizar</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-bar glass-card">
+        <div class="filter-group">
+          <label class="filter-label">Estado</label>
+          <select class="filter-select" id="filterEstado" onchange="filtrarTrabajos()">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_progreso">En Progreso</option>
+            <option value="completado">Completado</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Técnico</label>
+          <select class="filter-select" id="filterTecnico" onchange="filtrarTrabajos()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group search-group">
+          <label class="filter-label">Buscar</label>
+          <input type="text" class="filter-input" id="filterSearch" placeholder="Cliente o equipo..." oninput="filtrarTrabajos()" />
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrapper glass-card">
+        <div class="table-scroll">
+          <table class="data-table" id="tablaTrabajos">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Técnico</th>
+                <th>Cliente</th>
+                <th>Equipo</th>
+                <th>Estado</th>
+                <th>Asignado</th>
+                <th>Tiempo</th>
+              </tr>
+            </thead>
+            <tbody id="tablaBody">
+              <tr><td colspan="7" class="table-loading">Cargando trabajos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
