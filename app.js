@@ -11,6 +11,8 @@ const WEBHOOK_URL = 'https://onyapitesting.app.n8n.cloud/webhook/asignar-trabajo
 let tecnicos = [];
 let trabajos = [];
 let currentSection = 'asignar';
+let supabaseClient = null;
+let realtimeChannel = null;
 
 /* ===================================================
    SUPABASE FETCH HELPER
@@ -190,6 +192,8 @@ function renderDashboard() {
   renderTecnicoPerformance();
   renderDonutChart();
   renderTimeAnalysis();
+  renderWeeklyChart();
+  renderHeatmap();
 }
 
 function renderTecnicoPerformance() {
@@ -393,6 +397,206 @@ function formatMinutes(mins) {
 }
 
 /* ===================================================
+   WEEKLY BAR CHART
+   =================================================== */
+
+const TECNICO_COLORS = [
+  '#6366f1', '#22d3a3', '#f59e0b', '#ec4899', '#a855f7', '#14b8a6', '#f97316'
+];
+
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+function renderWeeklyChart() {
+  const canvas = document.getElementById('weeklyChart');
+  if (!canvas) return;
+
+  const wrap = canvas.parentElement;
+  const W = wrap.clientWidth || 800;
+  const H = 200;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // Build last 7 days (including today)
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+
+  // Count jobs per technician per day
+  const counts = tecnicos.map(tec => {
+    return days.map(day => {
+      return trabajos.filter(t => {
+        const td = new Date(t.fecha_asignada);
+        return t.tecnico_id === tec.id && td.toDateString() === day.toDateString();
+      }).length;
+    });
+  });
+
+  const maxVal = Math.max(...counts.flat(), 1);
+
+  const PAD_LEFT = 36;
+  const PAD_RIGHT = 12;
+  const PAD_TOP = 16;
+  const PAD_BOTTOM = 0;
+  const chartW = W - PAD_LEFT - PAD_RIGHT;
+  const chartH = H - PAD_TOP - PAD_BOTTOM;
+
+  const numDays = 7;
+  const groupW = chartW / numDays;
+  const barW = Math.min((groupW - 8) / Math.max(tecnicos.length, 1), 28);
+  const gap = 3;
+
+  // Gridlines
+  const gridLines = 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = PAD_TOP + chartH - (i / gridLines) * chartH;
+    ctx.beginPath();
+    ctx.moveTo(PAD_LEFT, y);
+    ctx.lineTo(W - PAD_RIGHT, y);
+    ctx.stroke();
+    // Y labels
+    const val = Math.round((i / gridLines) * maxVal);
+    ctx.fillStyle = 'rgba(148,163,184,0.6)';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(val, PAD_LEFT - 4, y + 3);
+  }
+
+  // Bars
+  days.forEach((day, di) => {
+    const groupX = PAD_LEFT + di * groupW;
+    const totalBars = tecnicos.length;
+    const totalBarW = totalBars * barW + (totalBars - 1) * gap;
+    const startX = groupX + (groupW - totalBarW) / 2;
+
+    tecnicos.forEach((tec, ti) => {
+      const count = counts[ti][di];
+      const barH = count > 0 ? Math.max((count / maxVal) * chartH, 4) : 0;
+      const x = startX + ti * (barW + gap);
+      const y = PAD_TOP + chartH - barH;
+      const color = TECNICO_COLORS[ti % TECNICO_COLORS.length];
+
+      // Bar with rounded top
+      const r = Math.min(4, barW / 2, barH / 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = count > 0 ? 0.85 : 0.15;
+      if (barH > 0) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + barW - r, y);
+        ctx.arcTo(x + barW, y, x + barW, y + r, r);
+        ctx.lineTo(x + barW, y + barH);
+        ctx.lineTo(x, y + barH);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fill();
+
+        // Value label on bar
+        if (barH > 18 && count > 0) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 10px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(count, x + barW / 2, y + 11);
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  });
+
+  // X-axis day labels
+  const daysEl = document.getElementById('weeklyDays');
+  daysEl.innerHTML = days.map(d => {
+    const isToday = d.toDateString() === new Date().toDateString();
+    return `<div class="weekly-day-label" style="${isToday ? 'color:var(--blue-light);font-weight:800' : ''}">${DIAS[d.getDay()]}<br><span style="font-size:9px;opacity:0.6">${d.getDate()}/${d.getMonth()+1}</span></div>`;
+  }).join('');
+
+  // Legend
+  const legendEl = document.getElementById('weeklyLegend');
+  legendEl.innerHTML = tecnicos.map((tec, i) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${TECNICO_COLORS[i % TECNICO_COLORS.length]}"></div>
+      <span class="legend-label">${escHtml(tec.nombre)}</span>
+    </div>
+  `).join('');
+}
+
+/* ===================================================
+   HEATMAP (Día de semana × Hora del día)
+   =================================================== */
+
+function renderHeatmap() {
+  const grid = document.getElementById('heatmapGrid');
+  const yLabels = document.getElementById('heatmapYLabels');
+  const xLabels = document.getElementById('heatmapXLabels');
+  if (!grid) return;
+
+  // Hours shown: 7am to 9pm (15 cols)
+  const startHour = 7;
+  const endHour = 21;
+  const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
+  const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  // 0=Sun,1=Mon...6=Sat — reindex to Mon=0...Sun=6
+  const reindex = [6, 0, 1, 2, 3, 4, 5];
+
+  // Build 7x(hours) matrix [dayIdx][hourIdx]
+  const matrix = Array.from({ length: 7 }, () => Array(hours.length).fill(0));
+
+  trabajos.forEach(t => {
+    const d = new Date(t.fecha_asignada);
+    const dow = reindex[d.getDay()]; // Mon=0
+    const hour = d.getHours();
+    const hi = hours.indexOf(hour);
+    if (hi >= 0 && dow >= 0) matrix[dow][hi]++;
+  });
+
+  const maxVal = Math.max(...matrix.flat(), 1);
+
+  function cellColor(val) {
+    if (val === 0) return 'rgba(99,102,241,0.06)';
+    const t = val / maxVal;
+    // Interpolate: indigo → purple → pink
+    const r = Math.round(99 + (236 - 99) * t);
+    const g = Math.round(102 + (72 - 102) * t);
+    const b = Math.round(241 + (153 - 241) * t);
+    return `rgba(${r},${g},${b},${0.3 + t * 0.7})`;
+  }
+
+  // Set grid layout
+  grid.style.gridTemplateColumns = `repeat(${hours.length}, 1fr)`;
+  grid.style.gridTemplateRows = `repeat(7, 1fr)`;
+
+  // Fill grid (row by row = day by day)
+  let cells = '';
+  for (let day = 0; day < 7; day++) {
+    for (let hi = 0; hi < hours.length; hi++) {
+      const val = matrix[day][hi];
+      const h = hours[hi];
+      const ampm = h >= 12 ? (h === 12 ? '12pm' : `${h-12}pm`) : `${h}am`;
+      const tooltip = `${dayNames[day]} ${ampm}: ${val} trabajo${val !== 1 ? 's' : ''}`;
+      cells += `<div class="heatmap-cell" style="background:${cellColor(val)}" data-tooltip="${tooltip}"></div>`;
+    }
+  }
+  grid.innerHTML = cells;
+
+  // Y labels
+  yLabels.innerHTML = dayNames.map(d => `<div class="heatmap-ylabel">${d}</div>`).join('');
+
+  // X labels (show every 2 hours)
+  xLabels.innerHTML = hours.map((h, i) => {
+    const label = i % 2 === 0 ? (h >= 12 ? `${h===12?12:h-12}pm` : `${h}am`) : '';
+    return `<div class="heatmap-xlabel">${label}</div>`;
+  }).join('');
+}
+
+/* ===================================================
    TABLE
    =================================================== */
 
@@ -582,10 +786,83 @@ function initials(name) {
 }
 
 /* ===================================================
+   SUPABASE REALTIME
+   =================================================== */
+
+function setupRealtime() {
+  try {
+    if (!window.supabase) return;
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    setRealtimeStatus('connecting');
+
+    realtimeChannel = supabaseClient
+      .channel('db-trabajos')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'trabajos'
+      }, (payload) => {
+        // Update local data based on event
+        if (payload.eventType === 'INSERT') {
+          trabajos.unshift(payload.new);
+        } else if (payload.eventType === 'UPDATE') {
+          const idx = trabajos.findIndex(t => t.id === payload.new.id);
+          if (idx >= 0) trabajos[idx] = payload.new;
+          else trabajos.unshift(payload.new);
+        } else if (payload.eventType === 'DELETE') {
+          trabajos = trabajos.filter(t => t.id !== payload.old.id);
+        }
+
+        // Re-render everything
+        updateQuickStats();
+        renderRecentList();
+        if (currentSection === 'dashboard') renderDashboard();
+        if (currentSection === 'trabajos') renderTablaTrabajos();
+
+        // Flash realtime indicator
+        flashRealtimePulse();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setRealtimeStatus('error');
+        }
+      });
+  } catch (err) {
+    console.warn('Realtime no disponible:', err);
+    setRealtimeStatus('error');
+  }
+}
+
+function setRealtimeStatus(status) {
+  const dot = document.querySelector('.realtime-dot');
+  const label = document.getElementById('realtimeStatus');
+  if (!dot || !label) return;
+
+  dot.className = `realtime-dot ${status}`;
+  const texts = {
+    connecting: 'Conectando...',
+    connected: 'Tiempo real ⚡',
+    error: 'Sin realtime'
+  };
+  label.textContent = texts[status] || status;
+}
+
+function flashRealtimePulse() {
+  const el = document.getElementById('realtimePulse');
+  if (!el) return;
+  el.classList.remove('hidden');
+  clearTimeout(el._timeout);
+  el._timeout = setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
+/* ===================================================
    AUTO REFRESH
    =================================================== */
 
-// Refresh every 30 seconds
+// Refresh every 30 seconds as fallback
 setInterval(() => {
   cargarTrabajos();
 }, 30000);
@@ -596,6 +873,7 @@ setInterval(() => {
 
 document.addEventListener('DOMContentLoaded', () => {
   cargarDatos();
+  setupRealtime();
 
   // Close sidebar when clicking outside on mobile
   document.addEventListener('click', (e) => {

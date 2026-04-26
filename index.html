@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <!-- Animated Background -->
@@ -50,6 +51,10 @@
       <div class="online-indicator">
         <span class="dot"></span>
         <span>Sistema activo</span>
+      </div>
+      <div class="realtime-badge" id="realtimeBadge">
+        <span class="realtime-dot connecting"></span>
+        <span id="realtimeStatus">Conectando...</span>
       </div>
     </div>
   </aside>
@@ -288,6 +293,38 @@
           <div class="loading-pulse">Calculando tiempos...</div>
         </div>
       </div>
+
+      <!-- Weekly Bar Chart -->
+      <div class="glass-card weekly-card">
+        <div class="weekly-card-header">
+          <h3 class="dash-card-title">📅 Trabajos por Día (últimos 7 días)</h3>
+          <div class="weekly-legend" id="weeklyLegend"></div>
+        </div>
+        <div class="weekly-chart-wrap">
+          <canvas id="weeklyChart"></canvas>
+        </div>
+        <div class="weekly-days" id="weeklyDays"></div>
+      </div>
+
+      <!-- Heatmap -->
+      <div class="glass-card heatmap-card">
+        <div class="heatmap-header">
+          <h3 class="dash-card-title">🔥 Mapa de Calor — Horas Pico</h3>
+          <p class="heatmap-sub">Distribución de trabajos por día y hora</p>
+        </div>
+        <div class="heatmap-outer">
+          <div class="heatmap-ylabels" id="heatmapYLabels"></div>
+          <div class="heatmap-content">
+            <div class="heatmap-grid" id="heatmapGrid"></div>
+            <div class="heatmap-xlabels" id="heatmapXLabels"></div>
+          </div>
+        </div>
+        <div class="heatmap-scale">
+          <span class="scale-label">0</span>
+          <div class="scale-gradient"></div>
+          <span class="scale-label">Más trabajos</span>
+        </div>
+      </div>
     </section>
 
     <!-- ==================== SECTION: TODOS LOS TRABAJOS ==================== -->
@@ -352,5 +389,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="app.js"></script>
+  <div id="realtimePulse" class="realtime-pulse-toast hidden">⚡ Datos actualizados en tiempo real</div>
 </body>
 </html>
